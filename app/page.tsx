@@ -1,6 +1,6 @@
 "use client";
 import { useState } from 'react';
-import Reader from '@/components/Reader';
+import Reader from '../components/Reader';
 
 export default function Home() {
   const [topic, setTopic] = useState('Travel');

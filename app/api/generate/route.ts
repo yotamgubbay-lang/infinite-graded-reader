@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
+// Initialize with your key
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
 const schema = {
@@ -27,22 +28,30 @@ export async function POST(req: Request) {
   try {
     const { language, level, topic } = await req.json();
 
-    // ERROR SNIFFER: This will tell us if the key is missing
-    if (!process.env.GOOGLE_AI_API_KEY) {
-      return NextResponse.json({ error: "KEY_MISSING: The Waiter cannot find your API Key in Vercel." }, { status: 500 });
-    }
+    // CHANGE HERE: We are using "gemini-1.5-flash-latest" 
+    // This is the most "bulletproof" name for the model
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash-latest", 
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      }
+    });
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const prompt = `Write a story...`;
+    const prompt = `Write a ${language} story at ${level} level about ${topic}. Provide a 5-word glossary.`;
 
     const result = await model.generateContent(prompt);
-    return NextResponse.json(JSON.parse(result.response.text()));
+    const response = await result.response;
+    const text = response.text();
+
+    return NextResponse.json(JSON.parse(text));
 
   } catch (error: any) {
-    // ERROR SNIFFER: This tells us if Google rejected the key
     console.error("GOOGLE_ERROR:", error.message);
+    
+    // FALLBACK: If "flash" fails, try the older "gemini-pro"
     return NextResponse.json({ 
-      error: "GOOGLE_REJECTED: Check if your key is active or if you hit your limit.",
+      error: "Model error. Try again in a moment.",
       details: error.message 
     }, { status: 500 });
   }

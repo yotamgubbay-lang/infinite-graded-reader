@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { NextResponse } from "next/server";
 
-// Initialize with your key
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
 const schema = {
@@ -28,10 +27,9 @@ export async function POST(req: Request) {
   try {
     const { language, level, topic } = await req.json();
 
-    // CHANGE HERE: We are using "gemini-1.5-flash-latest" 
-    // This is the most "bulletproof" name for the model
+    // 1. Try the most common model name
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash-latest", 
+      model: "gemini-1.5-flash", // Removed "-latest"
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
@@ -41,18 +39,25 @@ export async function POST(req: Request) {
     const prompt = `Write a ${language} story at ${level} level about ${topic}. Provide a 5-word glossary.`;
 
     const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const text = result.response.text();
 
     return NextResponse.json(JSON.parse(text));
 
   } catch (error: any) {
-    console.error("GOOGLE_ERROR:", error.message);
-    
-    // FALLBACK: If "flash" fails, try the older "gemini-pro"
-    return NextResponse.json({ 
-      error: "Model error. Try again in a moment.",
-      details: error.message 
-    }, { status: 500 });
+    console.error("PRIMARY_MODEL_FAILED:", error.message);
+
+    // 2. FALLBACK: If Flash is not found, try the universal "gemini-pro"
+    try {
+      const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
+      const fallbackPrompt = `Write a ${language} story at ${level} level about ${topic}. Return ONLY JSON with title, story_paragraphs (array), and glossary (array of word/translation/context).`;
+      
+      const fallbackResult = await fallbackModel.generateContent(fallbackPrompt);
+      return NextResponse.json(JSON.parse(fallbackResult.response.text()));
+    } catch (fallbackError: any) {
+      return NextResponse.json({ 
+        error: "Both models failed. Please check your Google AI Studio dashboard to see which models are enabled for your key.",
+        details: fallbackError.message 
+      }, { status: 500 });
+    }
   }
 }

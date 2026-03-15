@@ -26,15 +26,24 @@ const schema = {
 export async function POST(req: Request) {
   try {
     const { language, level, topic } = await req.json();
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      generationConfig: { responseMimeType: "application/json", responseSchema: schema }
-    });
 
-    const prompt = `Write a ${language} story at ${level} level about ${topic}. Provide a 5-word glossary.`;
+    // ERROR SNIFFER: This will tell us if the key is missing
+    if (!process.env.GOOGLE_AI_API_KEY) {
+      return NextResponse.json({ error: "KEY_MISSING: The Waiter cannot find your API Key in Vercel." }, { status: 500 });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const prompt = `Write a story...`;
+
     const result = await model.generateContent(prompt);
     return NextResponse.json(JSON.parse(result.response.text()));
-  } catch (error) {
-    return NextResponse.json({ error: "Generation failed" }, { status: 500 });
+
+  } catch (error: any) {
+    // ERROR SNIFFER: This tells us if Google rejected the key
+    console.error("GOOGLE_ERROR:", error.message);
+    return NextResponse.json({ 
+      error: "GOOGLE_REJECTED: Check if your key is active or if you hit your limit.",
+      details: error.message 
+    }, { status: 500 });
   }
 }

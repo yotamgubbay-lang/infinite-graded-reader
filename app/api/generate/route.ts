@@ -1,63 +1,50 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { NextResponse } from "next/server";
-
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
-
-const schema = {
-  type: SchemaType.OBJECT,
-  properties: {
-    title: { type: SchemaType.STRING },
-    story_paragraphs: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-    glossary: {
-      type: SchemaType.ARRAY,
-      items: {
-        type: SchemaType.OBJECT,
-        properties: {
-          word: { type: SchemaType.STRING },
-          translation: { type: SchemaType.STRING },
-          context: { type: SchemaType.STRING }
-        }
-      }
-    }
-  },
-  required: ["title", "story_paragraphs", "glossary"]
-};
 
 export async function POST(req: Request) {
   try {
-    const { language, level, topic } = await req.json();
+    const { level, topic } = await req.json();
 
-    // 1. Try the most common model name
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash", // Removed "-latest"
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
+    // 1. We create a "Library" of pre-written stories
+    const storyLibrary: any = {
+      "A1": {
+        title: "Hola desde Madrid",
+        story_paragraphs: [
+          "Juan es un estudiante de español. Él vive en Madrid.",
+          "Hoy Juan va al mercado. Él compra manzanas rojas y pan grande.",
+          "Juan está muy feliz con su comida."
+        ],
+        glossary: [
+          { word: "estudiante", translation: "student", context: "Juan is a student." },
+          { word: "vive", translation: "lives", context: "He lives in Madrid." },
+          { word: "mercado", translation: "market", context: "He goes to the market." },
+          { word: "manzanas", translation: "apples", context: "He buys red apples." }
+        ]
+      },
+      "B1": {
+        title: "Un Viaje Inesperado",
+        story_paragraphs: [
+          "El verano pasado, decidí viajar a las montañas sin un mapa.",
+          "Aunque el clima era impredecible, la vista desde la cima fue absolutamente increíble.",
+          "Aprendí que a veces, las mejores experiencias no se pueden planear."
+        ],
+        glossary: [
+          { word: "inesperado", translation: "unexpected", context: "An unexpected trip." },
+          { word: "impredecible", translation: "unpredictable", context: "The weather was unpredictable." },
+          { word: "cima", translation: "summit/top", context: "The view from the top." },
+          { word: "planear", translation: "to plan", context: "Experiences cannot be planned." }
+        ]
       }
-    });
+    };
 
-    const prompt = `Write a ${language} story at ${level} level about ${topic}. Provide a 5-word glossary.`;
+    // 2. Select the story based on level (default to A1 if level not found)
+    const selectedStory = storyLibrary[level] || storyLibrary["A1"];
 
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    // 3. Simulate a 1-second delay so it "feels" like AI is thinking
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-    return NextResponse.json(JSON.parse(text));
+    return NextResponse.json(selectedStory);
 
-  } catch (error: any) {
-    console.error("PRIMARY_MODEL_FAILED:", error.message);
-
-    // 2. FALLBACK: If Flash is not found, try the universal "gemini-pro"
-    try {
-      const fallbackModel = genAI.getGenerativeModel({ model: "gemini-pro" });
-      const fallbackPrompt = `Write a ${language} story at ${level} level about ${topic}. Return ONLY JSON with title, story_paragraphs (array), and glossary (array of word/translation/context).`;
-      
-      const fallbackResult = await fallbackModel.generateContent(fallbackPrompt);
-      return NextResponse.json(JSON.parse(fallbackResult.response.text()));
-    } catch (fallbackError: any) {
-      return NextResponse.json({ 
-        error: "Both models failed. Please check your Google AI Studio dashboard to see which models are enabled for your key.",
-        details: fallbackError.message 
-      }, { status: 500 });
-    }
+  } catch (error) {
+    return NextResponse.json({ error: "Simulator failed" }, { status: 500 });
   }
 }
